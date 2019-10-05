@@ -1,0 +1,3 @@
+[submodule "python/py_poker"]
+	path = python/py_poker
+	url = https://github.com/KwangHun-Song/py_poker
