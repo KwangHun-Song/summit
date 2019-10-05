@@ -2,10 +2,10 @@ import pygame
 import sys
 import util
 import random
-import time
 from pygame.locals import QUIT
 from pygame.rect import Rect
 
+# 상수
 WHITE = (255, 255, 255)
 GRAY = (180, 180, 180)
 DARK_GRAY = (90, 90, 90)
@@ -16,7 +16,7 @@ CARD_1_POS = (180, 150)
 CARD_2_POS = (280, 150)
 CARD_3_POS = (380, 150)
 CARD_4_POS = (480, 150)
-CARD_POSES = (CARD_0_POS, CARD_1_POS, CARD_2_POS, CARD_3_POS, CARD_4_POS)
+CARD_POSITIONS = (CARD_0_POS, CARD_1_POS, CARD_2_POS, CARD_3_POS, CARD_4_POS)
 GAME_STATE = ('START', 'GET_CARD', 'CHANGE_CARD', 'QUIT', 'RESTART', 'GUIDE')
 
 # 변수
@@ -27,6 +27,7 @@ card3 = Rect(CARD_3_POS, CARD_SIZE)
 card4 = Rect(CARD_4_POS, CARD_SIZE)
 chat = Rect((50, 300), (540, 160))
 message_string = ''
+result_message_string = ''
 multiple = 1
 running = True
 is_game_end = False
@@ -35,6 +36,7 @@ is_game_end = False
 class MyState:
     money = 100
     my_cards = []
+    # 이번 게임에서 카드를 바꾼 횟수
     change_count = 0
 
     def init(self):
@@ -44,6 +46,7 @@ class MyState:
 
 class GameState:
     state = 'START'
+    # 게임 내 사용하는 카드 한 벌
     deck = list(range(52))
 
     def init(self):
@@ -73,8 +76,8 @@ def show_ui(my_state):
 
     # 대화창
     pygame.draw.rect(screen, DARK_GRAY, chat)
-    message_lines = message_string.split('\n')
     # \n을 줄 단위로 보고 나눠서 출력
+    message_lines = message_string.split('\n')
     line_pos = [320, 320]
     for line in message_lines:
         message = font.render(line, False, WHITE)
@@ -89,7 +92,7 @@ def show_ui(my_state):
 
 def show_card(index, id):
     image = pygame.image.load("cards/" + util.get_sprite_name(id) + ".png")
-    screen.blit(image, CARD_POSES[index])
+    screen.blit(image, CARD_POSITIONS[index])
 
 
 def set_message(str):
@@ -98,6 +101,7 @@ def set_message(str):
 
 
 def get_card(game_state, my_state):
+    # 카드를 한 장 얻기
     get_random_id = random.choice(game_state.deck)
     my_state.my_cards.append(get_random_id)
     game_state.deck.remove(get_random_id)
@@ -105,6 +109,7 @@ def get_card(game_state, my_state):
 
 
 def change_card(game_state, my_state, index):
+    # 인덱스에 해당하는 카드를 바꾸기
     my_state.change_count += 1
     price = 2 ** my_state.change_count
     my_state.money -= price
@@ -114,10 +119,14 @@ def change_card(game_state, my_state, index):
     # print(str(get_random_id))
 
 
-def exchange(game_state, my_state):
+def exchange(game_state, my_state, is_forced_exchange=False):
+    global result_message_string
     money = util.get_exchange_money(my_state.my_cards)
-    message = '패를 계산합니다.\n'
-    message += '당신은 ' + str(money) + '원을 환전받았습니다.'
+    result_message_string = ''
+    if is_forced_exchange:
+        result_message_string += '더 카드를 바꿀 수 없어 강제로 패가 계산되었습니다.\n'
+    result_message_string += '패를 계산합니다.\n'
+    result_message_string += '당신은 ' + str(money) + '원을 환전받았습니다.'
     my_state.money += money
     game_state.state = 'QUIT'
 
@@ -166,10 +175,6 @@ def handle_input(game_state, my_state, key):
             exchange(game_state, my_state)
 
 
-def start(game_state):
-    game_state.state = 'START'
-
-
 def get_exchange_state_message(my_state):
     message = ''
     if len(my_state.my_cards) < 5:
@@ -188,7 +193,8 @@ def get_exchange_state_message(my_state):
 
 
 def update_ui(game_state, my_state):
-    message = ''
+    global result_message_string
+    # 대화창의 글 설정하기
     if game_state.state == 'START':
         set_message(
             '규칙은 간단해. 카드 다섯 장까지는 1만 받아\n' +
@@ -197,8 +203,7 @@ def update_ui(game_state, my_state):
             '[1] 시작한다(1원)        [0] 나간다'
         )
     elif game_state.state == 'RESTART':
-        message = get_exchange_state_message(my_state) + '\n게임을 다시 시작하겠나?\n[1] 시작한다(1원)        [0] 나간다'
-        set_message(message)
+        set_message(result_message_string + '\n게임을 다시 시작하겠나?\n[1] 시작한다(1원)        [0] 나간다')
     elif game_state.state == 'GET_CARD':
         set_message(get_exchange_state_message(my_state) + '[1] 한 장을 받는다(1원)        [0] 패 환전하기')
     elif game_state.state == 'CHANGE_CARD':
@@ -227,7 +232,6 @@ def fail_game():
 def main():
     game_state = GameState
     my_state = MyState
-    start(game_state)
 
     """메인 루프"""
     while running:
@@ -244,24 +248,20 @@ def main():
 
         update_ui(game_state, my_state)
 
-        if len(my_state.my_cards) == 5 and my_state.money < 2 ** (my_state.change_count + 1):
-            exchange(game_state, my_state)
-
         # 현재 판 종료 조건
         if game_state.state == 'QUIT':
             if my_state.money > 5:
                 game_state.state = 'RESTART'
             else:
                 fail_game()
-        # 카드를 바꿀 돈이 없으면 강제 환전
         elif len(my_state.my_cards) == 5 and my_state.money < 2 ** (my_state.change_count + 1):
-            exchange(game_state, my_state)
+            # 카드를 바꿀 돈이 없으면 강제 환전
+            exchange(game_state, my_state, True)
 
         # 게임 종료 조건
         if my_state.money < 0:
             fail_game()
-
-        if my_state.money > 10000:
+        elif my_state.money > 10000:
             win_game()
 
         pygame.display.update()
